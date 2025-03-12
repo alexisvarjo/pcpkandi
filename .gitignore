@@ -1,0 +1,9 @@
+api_key.txt
+processed_data/
+processed_databackup/
+unprocessed_data/
+venv/
+*.txt
+old/
+käyrät/
+.DS_Store
