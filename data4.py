@@ -26,25 +26,13 @@ linreg_se = pd.read_csv('processed_data/se_processed_data.csv')
 linreg_no = pd.read_csv('processed_data/no_processed_data.csv')
 linreg_gen = pd.read_csv('processed_data/gen_processed_data.csv')
 
-flag = True
 
-if flag:
-    min_vol = 10
+min_vol = 10
 
-    linreg_dek = drop_low_volume(linreg_dk, min_vol)
-    linreg_se = drop_low_volume(linreg_se, min_vol)
-    linreg_no = drop_low_volume(linreg_no, min_vol)
-    linreg_gen = drop_low_volume(linreg_gen, min_vol)
-
-flag = False
-
-
-if flag:
-    min_interestrate = 0.005
-    linreg_dk = restrict_interestrate(linreg_dk, min_interestrate)
-    linreg_se = restrict_interestrate(linreg_se, min_interestrate)
-    linreg_no = restrict_interestrate(linreg_no, min_interestrate)
-    linreg_gen = restrict_interestrate(linreg_gen, min_interestrate)
+linreg_dk = drop_low_volume(linreg_dk, min_vol)
+linreg_se = drop_low_volume(linreg_se, min_vol)
+linreg_no = drop_low_volume(linreg_no, min_vol)
+linreg_gen = drop_low_volume(linreg_gen, min_vol)
 
 flag = False
 max_illiquidity = 0.15 #0,01 on pienin järkevä (tippuu liikaa sampleja pois sen alle),
@@ -57,26 +45,7 @@ if flag:
     linreg_no = dropilliquid(linreg_no, max_illiquidity)
     linreg_gen = dropilliquid(linreg_gen, max_illiquidity)
 
-#eep pakotetaan epänegatiiviseksi
-flag = False
-
-if flag:
-    linreg_dk['x'] = linreg_dk['x'] - linreg_dk['EEP_fd']
-    linreg_dk['EEP_fd'] = np.where(linreg_dk['EEP_fd'] < 0, 0, linreg_dk['EEP_fd'])
-    linreg_dk['x'] = linreg_dk['x'] + linreg_dk['EEP_fd']
-
-    linreg_se['x'] = linreg_se['x'] - linreg_se['EEP_fd']
-    linreg_se['EEP_fd'] = np.where(linreg_se['EEP_fd'] < 0, 0, linreg_se['EEP_fd'])
-    linreg_se['x'] = linreg_se['x'] + linreg_se['EEP_fd']
-
-    linreg_no['x'] = linreg_no['x'] - linreg_no['EEP_fd']
-    linreg_no['EEP_fd'] = np.where(linreg_no['EEP_fd'] < 0, 0, linreg_no['EEP_fd'])
-    linreg_no['x'] = linreg_no['x'] + linreg_no['EEP_fd']
-
-    linreg_gen['x'] = linreg_gen['x'] - linreg_gen['EEP_fd']
-    linreg_gen['EEP_fd'] = np.where(linreg_gen['EEP_fd'] < 0, 0, linreg_gen['EEP_fd'])
-    linreg_gen['x'] = linreg_gen['x'] + linreg_gen['EEP_fd']
-
+count = 5
 
 if not linreg_dk.empty:
     linreg_dk = linreg_dk.dropna(subset=['x', 'y'])
@@ -92,17 +61,21 @@ if not linreg_dk.empty:
 
     print(model_dk.summary())
 
-    plt.figure()
+    plt.figure(figsize=(6,4))
+    plt.tight_layout()
     plt.scatter(linreg_dk['x'], linreg_dk['y'], label='Data')
     x_dk_sorted = np.sort(linreg_dk['x'])
     y_dk_pred = model_dk.params[0] + model_dk.params[1] * x_dk_sorted
     plt.plot(x_dk_sorted, y_dk_pred, color='red', label='Fit')
     plt.plot(x_dk_sorted, x_dk_sorted, '--', color='gray', label='y = x')
-    plt.title("DENMARK Linear Regression")
-    plt.xlabel("x")
-    plt.ylabel("y")
+    plt.title("Denmark")
+    plt.xlabel("Stock position value, DKK")
+    plt.ylabel("Synthetic stock position value, DKK")
     plt.legend()
-    plt.show()
+    #plt.show()
+    plt.savefig(f"käyrät/plot{count}.png", dpi=600)
+    plt.close()
+    count += 1
 
 if not linreg_se.empty:
     linreg_se = linreg_se.dropna(subset=['x', 'y'])
@@ -118,17 +91,22 @@ if not linreg_se.empty:
 
     print(model_se.summary())
 
-    plt.figure()
+    plt.figure(figsize=(6,4))
+    plt.tight_layout()
     plt.scatter(linreg_se['x'], linreg_se['y'], label='Data')
     x_se_sorted = np.sort(linreg_se['x'])
     y_se_pred = model_se.params[0] + model_se.params[1] * x_se_sorted
     plt.plot(x_se_sorted, y_se_pred, color='red', label='Fit')
     plt.plot(x_se_sorted, x_se_sorted, '--', color='gray', label='y = x')
-    plt.title("SWEDEN Linear Regression")
-    plt.xlabel("x")
-    plt.ylabel("y")
+    plt.title("Sweden")
+    plt.xlabel("Stock position value, SEK")
+    plt.ylabel("Synthetic stock position value, SEK")
     plt.legend()
-    plt.show()
+    #plt.show()
+    plt.savefig(f"käyrät/plot{count}.png", dpi=600)
+    plt.close()
+    count += 1
+
 
 if not linreg_no.empty:
     linreg_no = linreg_no.dropna(subset=['x', 'y'])
@@ -143,17 +121,21 @@ if not linreg_no.empty:
 
     print(model_no.summary())
 
-    plt.figure()
+    plt.figure(figsize=(6,4))
+    plt.tight_layout()
     plt.scatter(linreg_no['x'], linreg_no['y'], label='Data')
     x_no_sorted = np.sort(linreg_no['x'])
     y_no_pred = model_no.params[0] + model_no.params[1] * x_no_sorted
     plt.plot(x_no_sorted, y_no_pred, color='red', label='Fit')
     plt.plot(x_no_sorted, x_no_sorted, '--', color='gray', label='y = x')
-    plt.title("NORWAY Linear Regression")
-    plt.xlabel("x")
-    plt.ylabel("y")
+    plt.title("Norway")
+    plt.xlabel("Stock position value, NOK")
+    plt.ylabel("Synthetic stock position value, NOK")
     plt.legend()
-    plt.show()
+    #plt.show()
+    plt.savefig(f"käyrät/plot{count}.png", dpi=600)
+    plt.close()
+    count += 1
 
 
 X_gen = pd.to_numeric(linreg_gen['x'].dropna(), errors='coerce')
@@ -165,17 +147,21 @@ model_gen = sm.OLS(y_gen, X_gen).fit()
 
 print(model_gen.summary())
 
-plt.figure()
+plt.figure(figsize=(6,4))
+plt.tight_layout()
 plt.scatter(linreg_gen['x'], linreg_gen['y'], label='Data')
 x_gen_sorted = np.sort(linreg_gen['x'])
 y_gen_pred = model_gen.params[0] + model_gen.params[1] * x_gen_sorted
 plt.plot(x_gen_sorted, y_gen_pred, color='green', label='Fit')
 plt.plot(x_gen_sorted, x_gen_sorted, '--', color='gray', label='y = x')
 plt.title("General Linear Regression")
-plt.xlabel("x")
-plt.ylabel("y")
+plt.xlabel("Stock position value, SEK")
+plt.ylabel("Synthetic stock position value, SEK")
 plt.legend()
-plt.show()
+#plt.show()
+plt.savefig(f"käyrät/plot{count}.png", dpi=600)
+plt.close()
+count += 1
 
 
 df = linreg_no

@@ -1,11 +1,11 @@
 import numpy as np
 import pandas as pd
-from xmlrpc.client import MAXINT
+from scipy.stats import norm
 from joblib import Parallel, delayed
 from tqdm import tqdm
 from tqdm_joblib import tqdm_joblib
 
-def american_option_price_fd(S0, K, T, r, sigma, Smax, M, N, option_type='put', omega=1.2, tol=1e-2, max_iter=10000):
+def american_option_price_fd(S0, K, T, r, sigma, Smax, M, N, option_type='put', omega=1.2, tol=1e-3, max_iter=10000):
     """
     Price an American option using a Crank-Nicolson finite difference scheme with PSOR.
 
@@ -140,12 +140,24 @@ def compute_early_exercise_premium_fd(row, M=100, N=100):
     A_call = american_option_price_fd(S_adj, K, T, r, sigma, Smax, M, N, option_type='call')
     A_put  = american_option_price_fd(S_adj, K, T, r, sigma, Smax, M, N, option_type='put')
 
-    # The theoretical European put-call parity on the dividend-adjusted underlying is:
-    euro_parity = S_adj - K * np.exp(-r * T)
+    E_call = compute_euro_option_bs(S_adj, PV_div, K, T, r, sigma, Smax, M, N, option_type='call')
+    E_put  = compute_euro_option_bs(S_adj, PV_div, K, T, r, sigma, Smax, M, N, option_type='put')
 
-    # The early exercise premium is the difference between the American parity difference and the European parity.
-    EEP_fd = (A_call - A_put) - euro_parity
-    return np.maximum(EEP_fd, 0)
+    EEP_call = max(A_call - E_call, 0)
+    EEP_put = max(A_put - E_put, 0)
+
+    return (EEP_call, EEP_put)
+
+def compute_euro_option_bs(S_adj,PV_divs, K, T, r, sigma, Smax, M, N, option_type='call'):
+    # Implement Black-Scholes formula for European options
+    d1 = (np.log(S_adj / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    if option_type == 'call':
+        return S_adj * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
+    elif option_type == 'put':
+        return K * np.exp(-r * T) * norm.cdf(-d2) - S_adj * norm.cdf(-d1)
+    else:
+        raise ValueError("Invalid option type")
 
 def compute_eep_for_df(df, n_jobs=-1):
     total = len(df)
@@ -154,24 +166,25 @@ def compute_eep_for_df(df, n_jobs=-1):
         results = Parallel(n_jobs=n_jobs)(
             delayed(compute_early_exercise_premium_fd)(row) for _, row in df.iterrows()
         )
-    df['EEP_fd'] = results
+    df['EEP_call'] = [res[0] for res in results]
+    df['EEP_put'] = [res[1] for res in results]
     return df
 
-linreg_se = pd.read_csv('processed_data/se_processed_data.csv')
+#linreg_se = pd.read_csv('processed_data/se_processed_data.csv')
 linreg_dk = pd.read_csv('processed_data/dk_processed_data.csv')
 linreg_no = pd.read_csv('processed_data/no_processed_data.csv')
 
-print("calculating eep for sweden")
-linreg_se = compute_eep_for_df(linreg_se)
-linreg_se['x'] = linreg_se['x'] + linreg_se['EEP_fd']
-linreg_se.to_csv('processed_data/se_processed_data.csv', index=False)
+#print("calculating eep for sweden")
+#linreg_se = compute_eep_for_df(linreg_se)
+#linreg_se['x'] = linreg_se['x'] + linreg_se['EEP_call'] - linreg_se['EEP_put']
+#linreg_se.to_csv('processed_data/se_processed_data.csv', index=False)
 
 print("calculating eep for denmark")
 linreg_dk = compute_eep_for_df(linreg_dk)
-linreg_dk['x'] = linreg_dk['x'] + linreg_dk['EEP_fd']
+linreg_dk['x'] = linreg_dk['x'] + linreg_dk['EEP_call'] - linreg_dk['EEP_put']
 linreg_dk.to_csv('processed_data/dk_processed_data.csv', index=False)
 
 print("calculating eep for norway")
 linreg_no = compute_eep_for_df(linreg_no)
-linreg_no['x'] = linreg_no['x'] + linreg_no['EEP_fd']
+linreg_no['x'] = linreg_no['x'] + linreg_no['EEP_call'] - linreg_no['EEP_put']
 linreg_no.to_csv('processed_data/no_processed_data.csv', index=False)
