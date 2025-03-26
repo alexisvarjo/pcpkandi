@@ -21,6 +21,27 @@ def dropilliquid(df, max_illiquidity):
     #df = df.dropna(subset=['ulying_illiquidity', 'call_illiquidity', 'put_illiquidity'])
     return df
 
+def winsorize_errors(df, winsor_pct=0.05):
+    """
+    Calculate the error (y - x), then mark observations where the error
+    is below the winsor_pct or above the (1 - winsor_pct) quantile.
+    These observations are removed from the returned dataframe.
+    """
+    # Calculate the error column
+    df['error'] = df['y'] - df['x']
+
+    # Compute the lower and upper quantile bounds
+    lower_bound = df['error'].quantile(winsor_pct)
+    upper_bound = df['error'].quantile(1 - winsor_pct)
+
+    # Create a flag: 1 if error is outside the bounds, 0 otherwise
+    df['winsor_flag'] = np.where((df['error'] < lower_bound) | (df['error'] > upper_bound), 1, 0)
+
+    # Filter out rows where winsor_flag is 1
+    df_filtered = df[df['winsor_flag'] == 0].copy()
+    return df_filtered
+
+
 linreg_dk = pd.read_csv('processed_data/dk_processed_data.csv')
 linreg_se = pd.read_csv('processed_data/se_processed_data.csv')
 linreg_no = pd.read_csv('processed_data/no_processed_data.csv')
@@ -28,6 +49,8 @@ linreg_gen = pd.read_csv('processed_data/gen_processed_data.csv')
 
 
 min_vol = 10
+
+print("THE MINIMUM VOLUME IS:", min_vol)
 
 linreg_dk = drop_low_volume(linreg_dk, min_vol)
 linreg_se = drop_low_volume(linreg_se, min_vol)
@@ -37,7 +60,6 @@ linreg_gen = drop_low_volume(linreg_gen, min_vol)
 flag = False
 max_illiquidity = 0.15 #0,01 on pienin järkevä (tippuu liikaa sampleja pois sen alle),
 #0.15 on suurin järkevä ja tiputtaa about 10 pros kaikista havainnoista
-#ILLIQUID LASKUTOIMITUS ON VÄÄRIN TOISTAISEKSI!!!
 
 if flag:
     linreg_dk = dropilliquid(linreg_dk, max_illiquidity)
@@ -45,13 +67,18 @@ if flag:
     linreg_no = dropilliquid(linreg_no, max_illiquidity)
     linreg_gen = dropilliquid(linreg_gen, max_illiquidity)
 
-count = 5
+winsor_pct = 0.01  # This parameter controls the top and bottom percentage to drop
+linreg_dk = winsorize_errors(linreg_dk, winsor_pct)
+linreg_se = winsorize_errors(linreg_se, winsor_pct)
+linreg_no = winsorize_errors(linreg_no, winsor_pct)
+linreg_gen = winsorize_errors(linreg_gen, winsor_pct)
+
+count = 1
 
 if not linreg_dk.empty:
     linreg_dk = linreg_dk.dropna(subset=['x', 'y'])
 
     print("dk linreg:")
-
     X_dk = pd.to_numeric(linreg_dk['x'], errors='coerce')
     y_dk = pd.to_numeric(linreg_dk['y'], errors='coerce')
 
@@ -72,8 +99,8 @@ if not linreg_dk.empty:
     plt.xlabel("Stock position value, DKK")
     plt.ylabel("Synthetic stock position value, DKK")
     plt.legend()
-    #plt.show()
-    plt.savefig(f"käyrät/plot{count}.png", dpi=600)
+    plt.show()
+    #plt.savefig(f"käyrät/winzorisoitu/plot{count}.png", dpi=600)
     plt.close()
     count += 1
 
@@ -102,8 +129,8 @@ if not linreg_se.empty:
     plt.xlabel("Stock position value, SEK")
     plt.ylabel("Synthetic stock position value, SEK")
     plt.legend()
-    #plt.show()
-    plt.savefig(f"käyrät/plot{count}.png", dpi=600)
+    plt.show()
+    #plt.savefig(f"käyrät/winzorisoitu/plot{count}.png", dpi=600)
     plt.close()
     count += 1
 
@@ -132,8 +159,8 @@ if not linreg_no.empty:
     plt.xlabel("Stock position value, NOK")
     plt.ylabel("Synthetic stock position value, NOK")
     plt.legend()
-    #plt.show()
-    plt.savefig(f"käyrät/plot{count}.png", dpi=600)
+    plt.show()
+    #plt.savefig(f"käyrät/winzorisoitu/plot{count}.png", dpi=600)
     plt.close()
     count += 1
 
@@ -158,9 +185,9 @@ plt.title("General Linear Regression")
 plt.xlabel("Stock position value, SEK")
 plt.ylabel("Synthetic stock position value, SEK")
 plt.legend()
-#plt.show()
-plt.savefig(f"käyrät/plot{count}.png", dpi=600)
-plt.close()
+plt.show()
+#plt.savefig(f"käyrät/winzorisoitu/plot{count}.png", dpi=600)
+#plt.close()
 count += 1
 
 
@@ -282,3 +309,39 @@ formula = "parity_error ~ strike + ulying_illiquidity + call_illiquidity + put_i
 model = smf.ols(formula, data=df).fit()
 print("\ndenmark Regression results on parity error:")
 print(model.summary())
+
+bins = 60
+# Create histograms for error distributions (y - x) for each country
+
+if not linreg_dk.empty:
+    plt.figure(figsize=(6,4))
+    plt.hist(linreg_dk['y'] - linreg_dk['x'], bins=bins, edgecolor='black')
+    plt.title("Error Distribution for Denmark")
+    plt.xlabel("Error (y - x)")
+    plt.ylabel("Frequency")
+    plt.yscale('log')
+    plt.tight_layout()
+    #plt.savefig("käyrät/winzorisoitu/histlog_denmark.png", dpi=600)
+    plt.close()
+
+if not linreg_se.empty:
+    plt.figure(figsize=(6,4))
+    plt.hist(linreg_se['y'] - linreg_se['x'], bins=bins, edgecolor='black')
+    plt.title("Error Distribution for Sweden")
+    plt.xlabel("Error (y - x)")
+    plt.ylabel("Frequency")
+    plt.yscale('log')
+    plt.tight_layout()
+    #plt.savefig("käyrät/winzorisoitu/histlog_sweden.png", dpi=600)
+    plt.close()
+
+if not linreg_no.empty:
+    plt.figure(figsize=(6,4))
+    plt.hist(linreg_no['y'] - linreg_no['x'], bins=bins, edgecolor='black')
+    plt.title("Error Distribution for Norway")
+    plt.xlabel("Error (y - x)")
+    plt.ylabel("Frequency")
+    plt.yscale('log')
+    plt.tight_layout()
+    #plt.savefig("käyrät/winzorisoitu/histlog_norway.png", dpi=600)
+    plt.close()
