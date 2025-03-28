@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 #4B: agentti tietää osingot, isommat kulut
 #5A: agentti ei tiedä osinkoja, isommat kulut ja lagilla
 #5B: agentti tietää osingot, isommat kulut ja lagilla
-data = 'processed_data/no_processed_data.csv'
+data = 'processed_data/dk_processed_data.csv'
 
 def compute_lagged_profit(row, fees):
     x_t = row['x']
@@ -115,7 +115,7 @@ print(trades_B1['returns'].describe())
 # 2A: Agentti ei tiedä osinkoja, kuluja
 # ----------------------------
 A2 = pd.read_csv(data)
-direct_fees = 31.36  # SEKeissä
+direct_fees = 20.7  # SEKeissä
 
 A2 = A2.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
     'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
@@ -127,21 +127,21 @@ A2['x'] = A2['x'] + A2['PV_alldivs']
 A2['error'] = A2['y'] - A2['x']
 
 A2 = A2.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
-A2 = A2.query("error.abs() > 31.36")  # direct fees
+A2 = A2.query("error.abs() > 20.7")  # direct fees
 A2 = A2.reset_index(drop=True)
 
 A2['profit'] = A2['error'].abs() - direct_fees
 A2['max_trade_count'] = A2[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
-A2['trade_count'] = A2['max_trade_count'].astype(int).where(A2['error'].abs() > direct_fees, 0)
+A2['trade_count'] = A2['max_trade_count'].where(A2['profit'].abs() > 0, 0).astype(int)
 A2['total_profit'] = A2['profit'] * A2['trade_count']
 threshold = direct_fees
-obs_count = A2[A2['profit'] > threshold].shape[0]
+obs_count = A2[A2['error'].abs() > threshold].shape[0]
 print("A2 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
 
 A2['capital_per_trade'] = A2['x'].abs() + A2['y'].abs()
 # A2 is already filtered to trades so we compute returns directly
 trades_A2 = A2[A2['trade_count'] > 0]
-trades_A2['returns'] = trades_A2['total_profit'] / trades_A2['capital_per_trade']
+trades_A2['returns'] = trades_A2['profit'] / trades_A2['capital_per_trade']
 
 print(A2['total_profit'].describe())
 print("A2 total profit:", A2['total_profit'].sum())
@@ -151,7 +151,7 @@ print(trades_A2['returns'].describe())
 # 2B: Agentti tietää osingot, kuluja
 # ----------------------------
 B2 = pd.read_csv(data)
-direct_fees = 31.36  # SEKeissä
+direct_fees = 20.7  # SEKeissä
 
 B2 = B2.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
     'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
@@ -162,16 +162,16 @@ B2 = B2.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
 B2['error'] = B2['y'] - B2['x']
 
 B2 = B2.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
-B2 = B2.query("error.abs() > 31.36")
+B2 = B2.query("error.abs() > 20.7")
 B2 = B2.reset_index(drop=True)
 
 B2['profit'] = B2['error'].abs() - direct_fees
 B2['max_trade_count'] = B2[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
-B2['total_profit'] = B2['profit'] * B2['max_trade_count']
-B2['trade_count'] = B2['max_trade_count'].astype(int).where(B2['profit'] > 0, 0)
+B2['trade_count'] = B2['max_trade_count'].where(B2['profit'] > 0, 0).astype(int)
+B2['total_profit'] = B2['profit'] * B2['trade_count']
 
 threshold = direct_fees
-obs_count = B2[B2['profit'] > threshold].shape[0]
+obs_count = B2[B2['error'].abs() > threshold].shape[0]
 print("B2 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
 
 B2['capital_per_trade'] = B2['x'].abs() + B2['y'].abs()
@@ -185,7 +185,7 @@ print(trades_B2['returns'].describe())
 # 3A: Agentti ei tiedä osinkoja, kuluilla ja lagilla
 # ----------------------------
 A3 = pd.read_csv(data)
-direct_fees = 31.36  # SEKeissä
+direct_fees = 20.7  # SEKeissä
 
 A3 = A3.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
     'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
@@ -204,8 +204,9 @@ A3['lagged_profit'] = A3.apply(lambda row: compute_lagged_profit(row, direct_fee
 vol_columns = ['call_v', 'put_v', 'ulying_volume']
 A3['max_lagged_trade_count'] = A3[vol_columns].min(axis=1) * 0.1
 A3.drop(columns=['x_next', 'y_next'], inplace=True)
+A3['trade_count'] = A3['max_lagged_trade_count'].astype(int).where(A3['lagged_profit'] != 0, 0)
 
-A3['total_profit'] = A3['lagged_profit'] * A3['max_lagged_trade_count']
+A3['total_profit'] = (A3['lagged_profit'] * A3['max_lagged_trade_count']).where(A3['lagged_profit'] != 0)
 A3['capital_per_trade'] = A3['x'].abs() + A3['y'].abs()
 A3['returns'] = (A3['lagged_profit'] / A3['capital_per_trade']).where(A3['lagged_profit'] != 0)
 threshold = direct_fees
@@ -219,7 +220,7 @@ print(A3['returns'].describe())
 # 3B: Agentti tietää osingot, kuluilla ja lagilla
 # ----------------------------
 B3 = pd.read_csv(data)
-direct_fees = 31.36  # SEKeissä
+direct_fees = 20.7  # SEKeissä
 
 B3 = B3.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
     'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
@@ -235,10 +236,11 @@ B3['lagged_profit'] = B3.apply(lambda row: compute_lagged_profit(row, direct_fee
 
 vol_columns = ['call_v', 'put_v', 'ulying_volume']
 B3['max_lagged_trade_count'] = B3[vol_columns].min(axis=1) * 0.1
+B3['trade_count'] = B3['max_lagged_trade_count'].astype(int).where(B3['lagged_profit'] != 0, 0)
 
 B3.drop(columns=['x_next', 'y_next'], inplace=True)
 
-B3['total_profit'] = B3['lagged_profit'] * B3['max_lagged_trade_count']
+B3['total_profit'] = (B3['lagged_profit'] * B3['max_lagged_trade_count']).where(B3['lagged_profit'] != 0)
 B3['capital_per_trade'] = B3['x'].abs() + B3['y'].abs()
 B3['returns'] = (B3['lagged_profit'] / B3['capital_per_trade']).where(B3['lagged_profit'] != 0)
 
@@ -253,7 +255,7 @@ print(B3['returns'].describe())
 # 4A: Agentti ei tiedä osinkoja, isommat kulut
 # ----------------------------
 A4 = pd.read_csv(data)
-direct_fees = 62.73  # SEKeissä
+direct_fees = 41.39  # SEKeissä
 
 A4 = A4.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
     'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
@@ -265,13 +267,13 @@ A4['x'] = A4['x'] + A4['PV_alldivs']
 A4['error'] = A4['y'] - A4['x']
 
 A4 = A4.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
-A4 = A4.query("error.abs() > 62.73")  # direct fees
+A4 = A4.query("error.abs() > 41.39")  # direct fees
 A4 = A4.reset_index(drop=True)
 
 A4['profit'] = A4['error'].abs() - direct_fees
 A4['max_trade_count'] = A4[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
-A4['trades'] = A4['max_trade_count'].astype(int).where(A4['max_trade_count'] > 0, 0)
-A4['total_profit'] = A4['profit'] * A4['max_trade_count']
+A4['trades'] = A4['max_trade_count'].astype(int).where(A4['profit'] > 0, 0)
+A4['total_profit'] = A4['profit'] * A4['trades']
 A4['capital_per_trade'] = A4['x'].abs() + A4['y'].abs()
 trades_A4 = A4.copy()
 trades_A4['returns'] = (trades_A4['profit'] / trades_A4['capital_per_trade']).where(A4['trades'] > 0)
@@ -286,7 +288,7 @@ print(trades_A4['returns'].describe())
 # 4B: Agentti tietää osingot, isommat kulut
 # ----------------------------
 B4 = pd.read_csv(data)
-direct_fees = 62.73  # SEKeissä
+direct_fees = 41.39  # SEKeissä
 
 B4 = B4.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
     'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
@@ -298,13 +300,13 @@ B4 = B4.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
 B4['error'] = B4['y'] - B4['x']
 
 B4 = B4.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
-B4 = B4.query("error.abs() > 62.73")
+B4 = B4.query("error.abs() > 41.39")
 B4 = B4.reset_index(drop=True)
 
 B4['profit'] = B4['error'].abs() - direct_fees
 B4['max_trade_count'] = B4[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
 B4['trades'] = (B4['profit'] > 0) * B4['max_trade_count']
-B4['total_profit'] = B4['profit'] * B4['max_trade_count']
+B4['total_profit'] = B4['profit'] * B4['trades']
 B4['capital_per_trade'] = B4['x'].abs() + B4['y'].abs()
 trades_B4 = B4.copy()
 trades_B4['returns'] = (trades_B4['profit'] / trades_B4['capital_per_trade']).where(B4['trades'] > 0)
@@ -319,7 +321,7 @@ print(trades_B4['returns'].describe())
 # 5A: Agentti ei tiedä osinkoja, isommat kulut ja lagilla
 # ----------------------------
 A5 = pd.read_csv(data)
-direct_fees = 62.73  # SEKeissä
+direct_fees = 41.39  # SEKeissä
 
 A5 = A5.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
     'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
@@ -339,7 +341,7 @@ A5['max_lagged_trade_count'] = A5[vol_columns].min(axis=1) * 0.1
 
 A5.drop(columns=['x_next', 'y_next'], inplace=True)
 
-A5['total_profit'] = A5['lagged_profit'] * A5['max_lagged_trade_count'] - direct_fees
+A5['total_profit'] = (A5['lagged_profit'] * A5['max_lagged_trade_count']).where(A5['lagged_profit'] != 0)
 A5['capital_per_trade'] = A5['x'].abs() + A5['y'].abs()
 A5['returns'] = (A5['lagged_profit'] / A5['capital_per_trade']).where(A5['lagged_profit'] != 0)
 threshold = direct_fees
@@ -353,7 +355,7 @@ print(A5['returns'].describe())
 # 5B: Agentti tietää osingot, isommat kulut ja lagilla
 # ----------------------------
 B5 = pd.read_csv(data)
-direct_fees = 62.73  # SEKeissä
+direct_fees = 41.39  # SEKeissä
 
 B5 = B5.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
     'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
@@ -373,7 +375,7 @@ B5['max_lagged_trade_count'] = B5[vol_columns].min(axis=1) * 0.1
 
 B5.drop(columns=['x_next', 'y_next'], inplace=True)
 
-B5['total_profit'] = B5['lagged_profit'] * B5['max_lagged_trade_count']
+B5['total_profit'] = (B5['lagged_profit'] * B5['max_lagged_trade_count']).where(B5['lagged_profit'] != 0)
 B5['capital_per_trade'] = B5['x'].abs() + B5['y'].abs()
 B5['returns'] = (B5['lagged_profit'] / B5['capital_per_trade']).where(B5['lagged_profit'] != 0)
 threshold = direct_fees
