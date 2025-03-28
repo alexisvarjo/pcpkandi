@@ -58,10 +58,32 @@ def simulate_trade(data:pd.dataframe, divs:bool, fees:float, lag:bool):
         data = data[data['trade_count'] > 0].copy()
         data['returns'] = data['profit'] / data['capital_per_trade']
     else:
-        pass #logiikka lagin kanssa laskemiseen
+        data['error'] = data['y'] - data['x']
+        data['x_next'] = data['x'].shift(-1)
+        data['y_next'] = data['y'].shift(-1)
+        data['lagged_profit'] = data.apply(lambda row: compute_lagged_profit(row, fees), axis=1)
+        vol_columns = ['call_v', 'put_v', 'ulying_volume']
+        data['max_lagged_trade_count'] = data[vol_columns].min(axis=1) * 0.1
+        data.drop(columns=['x_next', 'y_next'], inplace=True)
+        data['trade_count'] = data['max_lagged_trade_count'].astype(int).where(data['lagged_profit'] != 0, 0)
+        data['total_profit'] = (data['lagged_profit'] * data['max_lagged_trade_count']).where(data['lagged_profit'] != 0)
+        data['capital_per_trade'] = data['x'].abs() + data['y'].abs()
+        data['returns'] = (data['lagged_profit'] / data['capital_per_trade']).where(data['lagged_profit'] != 0)
     return data
 
+def wf(data, filename, country, id):
+    with open(filename, 'a') as f:
+        f.write(f"Country: {country}\n")
+        f.write(f"Scenario {id}\n")
+        f.write((data['total_profit'].describe()).to_string())
+        f.write("\n")
+        f.write(f"{id} total profit: {data['total_profit'].sum()}")
+        f.write((data['returns'].describe()).to_string())
+        f.write("\n")
+        f.write("\n")
+
 def wrapper(datas:list, low_fees:list, high_fees:list, countries:list):
+    filename = "output.txt"
     for csv, low_fee, high_fee, country in zip(datas, low_fees, high_fees, countries):
         #1A: Agentti ei tiedä osinkoja, ei kuluja
         A1 = pd.read_csv(csv)
@@ -69,10 +91,7 @@ def wrapper(datas:list, low_fees:list, high_fees:list, countries:list):
             'IV_put', 'IV_call', 'country', 'underlying_return', 'underlying_log_return',
             'underlying_volatility'])
         A1 = simulate_trade(A1, False, 0.0, False)
-
-        print(A1['total_profit'].describe())
-        print("A1 total profit:", A1['total_profit'].sum())
-        print(A1['returns'].describe())
+        wf(A1, filename, country, "1A")
 
         #1B: Agentti tietää osingot, ei kuluja
         B1 = pd.read_csv(csv)
@@ -80,20 +99,14 @@ def wrapper(datas:list, low_fees:list, high_fees:list, countries:list):
             'IV_put', 'IV_call', 'country', 'underlying_return', 'underlying_log_return',
             'underlying_volatility'])
         B1 = simulate_trade(B1, True, 0.0, False)
-
-        print(B1['total_profit'].describe())
-        print("B1 total profit:", B1['total_profit'].sum())
-        print(B1['returns'].describe())
+        wf(B1, filename, country, "1B")
 
         # 2A: Agentti ei tiedä osinkoja, kuluja
         A2 = pd.read_csv(csv)
         A2 = A2.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
             'IV_put', 'IV_call'])
         A2 = simulate_trade(A2, False, low_fee, False)
-
-        print(A2['total_profit'].describe())
-        print("A2 total profit:", A2['total_profit'].sum())
-        print(A2['returns'].describe())
+        wf(A2, filename, country, "2A")
 
         # 2B: Agentti tietää osingot, kuluja
         B2 = pd.read_csv(csv)
@@ -102,175 +115,56 @@ def wrapper(datas:list, low_fees:list, high_fees:list, countries:list):
             'IV_put', 'IV_call', 'country', 'underlying_return', 'underlying_log_return',
             'underlying_volatility'])
         B2 = simulate_trade(B2, False, low_fee, False)
+        wf(B2, filename, country, "2B")
 
-        print(B2['total_profit'].describe())
-        print("B2 total profit:", B2['total_profit'].sum())
-        print(B2['returns'].describe())
+        # 3A: Agentti ei tiedä osinkoja, kuluilla ja lagilla
+        A3 = pd.read_csv(csv)
+        A3 = A3.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
+            'country', 'underlying_return', 'underlying_log_return',
+            'underlying_volatility'])
+        A3 = simulate_trade(A3, False, low_fee, True)
+        wf(A3, filename, country, "3A")
 
+        # 3B: Agentti tietää osingot, kuluilla ja lagilla
+        B3 = pd.read_csv(csv)
+        B3 = B3.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
+            'country', 'underlying_return', 'underlying_log_return',
+            'underlying_volatility'])
+        B3 = simulate_trade(B3, True, low_fee, True)
+        wf(B3, filename, country, "3B")
 
-# ----------------------------
-# 3A: Agentti ei tiedä osinkoja, kuluilla ja lagilla
-# ----------------------------
-A3 = pd.read_csv(data)
-direct_fees = 20.7  # SEKeissä
+        # 4A: Agentti ei tiedä osinkoja, isommat kulut
+        # ----------------------------
+        A4 = pd.read_csv(csv)
+        A4 = A4.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
+            'IV_put', 'IV_call', 'country', 'underlying_return', 'underlying_log_return',
+            'underlying_volatility'])
+        A4 = simulate_trade(A4, False, high_fee, False)
+        wf(A4, filename, country, "4A")
 
-A3 = A3.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
-    'Ivalue_put', 'Ivalue_call', 'IV_put', 'IV_call', 'put_delta', 'call_delta',
-    'gamma', 'vega', 'call_theta', 'put_theta', 'vega', 'call_rho',
-    'put_rho', 'country', 'underlying_return', 'underlying_log_return',
-    'underlying_volatility'])
-A3['x'] = A3['x'] + A3['PV_alldivs']
-A3['error'] = A3['y'] - A3['x']
-A3['x_next'] = A3['x'].shift(-1)
-A3['y_next'] = A3['y'].shift(-1)
+        # 4B: Agentti tietää osingot, isommat kulut
+        B4 = pd.read_csv(csv)
+        B4 = B4.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
+            'IV_put', 'IV_call', 'country','underlying_return', 'underlying_log_return',
+            'underlying_volatility'])
+        B4 = simulate_trade(B4, True, high_fee, False)
+        wf(B4, filename, country, "4B")
 
-# Apply the lagged profit function row-wise:
-A3['lagged_profit'] = A3.apply(lambda row: compute_lagged_profit(row, direct_fees), axis=1)
+        # 5A: Agentti ei tiedä osinkoja, isommat kulut ja lagilla
+        A5 = pd.read_csv(csv)
+        A5 = A5.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
+            'country', 'underlying_return', 'underlying_log_return',
+            'underlying_volatility'])
+        A5 = simulate_trade(A5, False, high_fee, True)
+        wf(A5, filename, country, "5A")
 
-vol_columns = ['call_v', 'put_v', 'ulying_volume']
-A3['max_lagged_trade_count'] = A3[vol_columns].min(axis=1) * 0.1
-A3.drop(columns=['x_next', 'y_next'], inplace=True)
-A3['trade_count'] = A3['max_lagged_trade_count'].astype(int).where(A3['lagged_profit'] != 0, 0)
-
-A3['total_profit'] = (A3['lagged_profit'] * A3['max_lagged_trade_count']).where(A3['lagged_profit'] != 0)
-A3['capital_per_trade'] = A3['x'].abs() + A3['y'].abs()
-A3['returns'] = (A3['lagged_profit'] / A3['capital_per_trade']).where(A3['lagged_profit'] != 0)
-threshold = direct_fees
-obs_count = A3[A3['error'].abs() > threshold].shape[0]
-print("A3 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
-print(A3['total_profit'].describe())
-print("A3 total profit:", A3['total_profit'].sum())
-print(A3['returns'].describe())
-
-# ----------------------------
-# 3B: Agentti tietää osingot, kuluilla ja lagilla
-# ----------------------------
-B3 = pd.read_csv(data)
-direct_fees = 20.7  # SEKeissä
-
-B3 = B3.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
-    'Ivalue_put', 'Ivalue_call', 'IV_put', 'IV_call', 'put_delta', 'call_delta',
-    'gamma', 'vega', 'call_theta', 'put_theta', 'vega', 'call_rho',
-    'put_rho', 'country', 'underlying_return', 'underlying_log_return',
-    'underlying_volatility'])
-B3['error'] = B3['y'] - B3['x']
-B3['x_next'] = B3['x'].shift(-1)
-B3['y_next'] = B3['y'].shift(-1)
-
-B3['lagged_profit'] = B3.apply(lambda row: compute_lagged_profit(row, direct_fees), axis=1)
-
-vol_columns = ['call_v', 'put_v', 'ulying_volume']
-B3['max_lagged_trade_count'] = B3[vol_columns].min(axis=1) * 0.1
-B3['trade_count'] = B3['max_lagged_trade_count'].astype(int).where(B3['lagged_profit'] != 0, 0)
-
-B3.drop(columns=['x_next', 'y_next'], inplace=True)
-
-B3['total_profit'] = (B3['lagged_profit'] * B3['max_lagged_trade_count']).where(B3['lagged_profit'] != 0)
-B3['capital_per_trade'] = B3['x'].abs() + B3['y'].abs()
-B3['returns'] = (B3['lagged_profit'] / B3['capital_per_trade']).where(B3['lagged_profit'] != 0)
-
-threshold = direct_fees
-obs_count = B3[B3['error'].abs() > threshold].shape[0]
-print("B3 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
-print(B3['total_profit'].describe())
-print("B3 total profit:", B3['total_profit'].sum())
-print(B3['returns'].describe())
-
-# ----------------------------
-# 4A: Agentti ei tiedä osinkoja, isommat kulut
-# ----------------------------
-A4 = pd.read_csv(data)
-A4 = A4.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'IV_put', 'IV_call', 'country', 'underlying_return', 'underlying_log_return',
-    'underlying_volatility'])
-A4 = simulate_trade(A4, False, high_fees, False)
-print("A4 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
-print(A4['total_profit'].describe())
-print("A4 total profit:", A4['total_profit'].sum())
-print(A4['returns'].describe())
-
-# ----------------------------
-# 4B: Agentti tietää osingot, isommat kulut
-# ----------------------------
-B4 = pd.read_csv(data)
-B4 = B4.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'IV_put', 'IV_call', 'country','underlying_return', 'underlying_log_return',
-    'underlying_volatility'])
-B4 = simulate_trade(B4, True, high_fees, False)
-print(B4['total_profit'].describe())
-print("B4 total profit:", B4['total_profit'].sum())
-print(B4['returns'].describe())
-
-# ----------------------------
-# 5A: Agentti ei tiedä osinkoja, isommat kulut ja lagilla
-# ----------------------------
-A5 = pd.read_csv(data)
-direct_fees = 41.39  # SEKeissä
-
-A5 = A5.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
-    'Ivalue_put', 'Ivalue_call', 'IV_put', 'IV_call', 'put_delta', 'call_delta',
-    'gamma', 'vega', 'call_theta', 'put_theta', 'vega', 'call_rho',
-    'put_rho', 'country', 'underlying_return', 'underlying_log_return',
-    'underlying_volatility'])
-A5['x'] = A5['x'] + A5['PV_alldivs']
-A5['error'] = A5['y'] - A5['x']
-A5['x_next'] = A5['x'].shift(-1)
-A5['y_next'] = A5['y'].shift(-1)
-
-A5['lagged_profit'] = A5.apply(lambda row: compute_lagged_profit(row, direct_fees), axis=1)
-
-vol_columns = ['call_v', 'put_v', 'ulying_volume']
-A5['max_lagged_trade_count'] = A5[vol_columns].min(axis=1) * 0.1
-
-A5.drop(columns=['x_next', 'y_next'], inplace=True)
-
-A5['total_profit'] = (A5['lagged_profit'] * A5['max_lagged_trade_count']).where(A5['lagged_profit'] != 0)
-A5['capital_per_trade'] = A5['x'].abs() + A5['y'].abs()
-A5['returns'] = (A5['lagged_profit'] / A5['capital_per_trade']).where(A5['lagged_profit'] != 0)
-threshold = direct_fees
-obs_count = A5[A5['error'].abs() > threshold].shape[0]
-print("A5 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
-print(A5['total_profit'].describe())
-print("A5 total profit:", A5['total_profit'].sum())
-print(A5['returns'].describe())
-
-# ----------------------------
-# 5B: Agentti tietää osingot, isommat kulut ja lagilla
-# ----------------------------
-B5 = pd.read_csv(data)
-direct_fees = 41.39  # SEKeissä
-
-B5 = B5.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
-    'Ivalue_put', 'Ivalue_call', 'IV_put', 'IV_call', 'put_delta', 'call_delta',
-    'gamma', 'vega', 'call_theta', 'put_theta', 'vega', 'call_rho',
-    'put_rho', 'country', 'underlying_return', 'underlying_log_return',
-    'underlying_volatility'])
-
-B5['error'] = B5['y'] - B5['x']
-B5['x_next'] = B5['x'].shift(-1)
-B5['y_next'] = B5['y'].shift(-1)
-
-B5['lagged_profit'] = B5.apply(lambda row: compute_lagged_profit(row, direct_fees), axis=1)
-
-vol_columns = ['call_v', 'put_v', 'ulying_volume']
-B5['max_lagged_trade_count'] = B5[vol_columns].min(axis=1) * 0.1
-
-B5.drop(columns=['x_next', 'y_next'], inplace=True)
-
-B5['total_profit'] = (B5['lagged_profit'] * B5['max_lagged_trade_count']).where(B5['lagged_profit'] != 0)
-B5['capital_per_trade'] = B5['x'].abs() + B5['y'].abs()
-B5['returns'] = (B5['lagged_profit'] / B5['capital_per_trade']).where(B5['lagged_profit'] != 0)
-threshold = direct_fees
-obs_count = B5[B5['error'].abs() > threshold].shape[0]
-print("B5 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
-print(B5['total_profit'].describe())
-print("B5 total profit:", B5['total_profit'].sum())
-print(B5['returns'].describe())
-
+        # 5B: agentti tietää osingot, isompi kulu ja lagi
+        B5 = pd.read_csv(csv)
+        B5 = B5.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
+            'country', 'underlying_return', 'underlying_log_return',
+            'underlying_volatility'])
+        B5 = simulate_trade(B5, True, high_fee, True)
+        wf(B5, filename, country, "5B")
 
 # ----------------------------
 # ex POST analyysit loppuu
@@ -315,12 +209,12 @@ monthly_arbitrage["percentage_available"] = monthly_arbitrage["available"] / mon
 
 
 if __name__ == "__main__":
-    datas_list = ['processed_data/dk_processed_data.csv', 'processed_data/se_processed_data.csv',
-        'processed_data/no_processed_data.csv']
+    datas_list = ['processed_data/dk_processed_data.csv','processed_data/no_processed_data.csv',
+        'processed_data/se_processed_data.csv']
     low_fees = [20, 30, 20]
     high_fees = [40, 40, 40]
-
-
+    countries = ['Denmark', 'Norway', 'Sweden']
+    wrapper(datas_list, low_fees, high_fees, countries)
 
 
 

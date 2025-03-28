@@ -7,3 +7,24 @@ venv/
 old/
 käyrät/
 .DS_Store
+# Existing ignores
+api_key.txt
+processed_data/
+processed_databackup/
+unprocessed_data/
+venv/
+*.txt
+old/
+käyrät/
+.DS_Store
+
+# Rust project ignores (inside calculate_eeps)
+calculate_eeps/target/
+calculate_eeps/Cargo.lock
+calculate_eeps/.cargo/
+calculate_eeps/.rustc_info.json
+
+# Optional: IDE/editor-specific files (if you use these)
+**/.idea/
+**/.vscode/
+**/*.swp
