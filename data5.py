@@ -5,9 +5,6 @@ import matplotlib.pyplot as plt
 """EX ANTE ANALYYSI"""
 
 # Kaikissa skenaarioissa tiputetaan alle 10 volyymiset havainnot
-# Koska niitä ei voi treidata
-
-
 #1A: Agentti ei tiedä osinkoja, ei kuluja
 #1B: agentti tietää osingot, ei kuluja
 #2A: agentti ei tiedä osingot, kuluja
@@ -18,7 +15,6 @@ import matplotlib.pyplot as plt
 #4B: agentti tietää osingot, isommat kulut
 #5A: agentti ei tiedä osinkoja, isommat kulut ja lagilla
 #5B: agentti tietää osingot, isommat kulut ja lagilla
-data = 'processed_data/dk_processed_data.csv'
 
 def compute_lagged_profit(row, fees):
     x_t = row['x']
@@ -46,140 +42,71 @@ def compute_lagged_profit(row, fees):
     # Choose the alternative with the higher profit, if positive; otherwise, no trade.
     return max(profit_hedge, profit_close)
 
-# ----------------------------
-# 1A: Agentti ei tiedä osinkoja, ei kuluja
-# ----------------------------
-A1 = pd.read_csv(data)
-A1 = A1.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
-    'Ivalue_put', 'Ivalue_call', 'IV_put', 'IV_call', 'put_delta', 'call_delta',
-    'gamma', 'vega', 'call_theta', 'put_theta', 'vega', 'call_rho',
-    'put_rho', 'country', 'underlying_return', 'underlying_log_return',
-    'underlying_volatility'])
-A1['x'] = A1['x'] + A1['PV_alldivs']
-A1['error'] = A1['y'] - A1['x']
+def simulate_trade(data:pd.dataframe, divs:bool, fees:float, lag:bool):
+    if not divs:
+        data['x'] = data['x'] + data['PV_alldivs']
+    data = data.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
+    data['error'] = data['y']-data['x']
 
-A1 = A1.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
-A1 = A1.reset_index(drop=True)
+    if not lag:
+        data['profit'] = data['profit'].abs() - fees
+        data = data[data['profit'] > 0]
+        data['max_trade_count'] = data[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
+        data['total_profit'] = data['profit'] * data['max_trade_count']
+        data['capital_per_trade'] = data['x'].abs() + data['y'].abs()
+        data['trade_count'] = data['max_trade_count'].astype(int)
+        data = data[data['trade_count'] > 0].copy()
+        data['returns'] = data['profit'] / data['capital_per_trade']
+    else:
+        pass #logiikka lagin kanssa laskemiseen
+    return data
 
-A1['profit'] = A1['error'].abs()
-threshold = 0
-obs_count = A1[A1['error'].abs() > threshold].shape[0]
-print("A1 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
-A1['max_trade_count'] = A1[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
-A1['total_profit'] = A1['profit'] * A1['max_trade_count']
-A1['capital_per_trade'] = A1['x'].abs() + A1['y'].abs()
+def wrapper(datas:list, low_fees:list, high_fees:list, countries:list):
+    for csv, low_fee, high_fee, country in zip(datas, low_fees, high_fees, countries):
+        #1A: Agentti ei tiedä osinkoja, ei kuluja
+        A1 = pd.read_csv(csv)
+        A1 = A1.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
+            'IV_put', 'IV_call', 'country', 'underlying_return', 'underlying_log_return',
+            'underlying_volatility'])
+        A1 = simulate_trade(A1, False, 0.0, False)
 
-A1['trade_count'] = A1['max_trade_count'].astype(int)
-# Compute returns only on rows where a trade occurs (error.abs() > threshold)
-trades_A1 = A1[A1['trade_count'] > 0].copy()
-trades_A1['returns'] = trades_A1['profit'] / trades_A1['capital_per_trade']
+        print(A1['total_profit'].describe())
+        print("A1 total profit:", A1['total_profit'].sum())
+        print(A1['returns'].describe())
 
-print(A1['total_profit'].describe())
-print("A1 total profit:", A1['total_profit'].sum())
-print(trades_A1['returns'].describe())
+        #1B: Agentti tietää osingot, ei kuluja
+        B1 = pd.read_csv(csv)
+        B1 = B1.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
+            'IV_put', 'IV_call', 'country', 'underlying_return', 'underlying_log_return',
+            'underlying_volatility'])
+        B1 = simulate_trade(B1, True, 0.0, False)
 
-# ----------------------------
-# 1B: Agentti tietää osingot, ei kuluja
-# ----------------------------
-B1 = pd.read_csv(data)
-B1 = B1.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
-    'Ivalue_put', 'Ivalue_call', 'IV_put', 'IV_call', 'put_delta', 'call_delta',
-    'gamma', 'vega', 'call_theta', 'put_theta', 'vega', 'call_rho',
-    'put_rho', 'country', 'underlying_return', 'underlying_log_return',
-    'underlying_volatility'])
+        print(B1['total_profit'].describe())
+        print("B1 total profit:", B1['total_profit'].sum())
+        print(B1['returns'].describe())
 
-B1['error'] = B1['y'] - B1['x']
-B1 = B1.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
-B1 = B1.reset_index(drop=True)
+        # 2A: Agentti ei tiedä osinkoja, kuluja
+        A2 = pd.read_csv(csv)
+        A2 = A2.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
+            'IV_put', 'IV_call'])
+        A2 = simulate_trade(A2, False, low_fee, False)
 
-B1['profit'] = B1['error'].abs()
-B1['max_trade_count'] = B1[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
-B1['total_profit'] = B1['profit'] * B1['max_trade_count']
-B1['trade_count'] = B1['max_trade_count'].astype(int)
+        print(A2['total_profit'].describe())
+        print("A2 total profit:", A2['total_profit'].sum())
+        print(A2['returns'].describe())
 
-threshold = 0
-obs_count = B1[B1['error'].abs() > threshold].shape[0]
-print("B1 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
-B1['capital_per_trade'] = B1['x'].abs() + B1['y'].abs()
+        # 2B: Agentti tietää osingot, kuluja
+        B2 = pd.read_csv(csv)
 
-trades_B1 = B1[B1['trade_count'] > 0].copy()
-trades_B1['returns'] = trades_B1['profit'] / trades_B1['capital_per_trade']
+        B2 = B2.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
+            'IV_put', 'IV_call', 'country', 'underlying_return', 'underlying_log_return',
+            'underlying_volatility'])
+        B2 = simulate_trade(B2, False, low_fee, False)
 
-print(B1['total_profit'].describe())
-print("B1 total profit:", B1['total_profit'].sum())
-print(trades_B1['returns'].describe())
+        print(B2['total_profit'].describe())
+        print("B2 total profit:", B2['total_profit'].sum())
+        print(B2['returns'].describe())
 
-# ----------------------------
-# 2A: Agentti ei tiedä osinkoja, kuluja
-# ----------------------------
-A2 = pd.read_csv(data)
-direct_fees = 20.7  # SEKeissä
-
-A2 = A2.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
-    'Ivalue_put', 'Ivalue_call', 'IV_put', 'IV_call', 'put_delta', 'call_delta',
-    'gamma', 'vega', 'call_theta', 'put_theta', 'vega', 'call_rho',
-    'put_rho', 'country', 'underlying_return', 'underlying_log_return',
-    'underlying_volatility'])
-A2['x'] = A2['x'] + A2['PV_alldivs']
-A2['error'] = A2['y'] - A2['x']
-
-A2 = A2.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
-A2 = A2.query("error.abs() > 20.7")  # direct fees
-A2 = A2.reset_index(drop=True)
-
-A2['profit'] = A2['error'].abs() - direct_fees
-A2['max_trade_count'] = A2[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
-A2['trade_count'] = A2['max_trade_count'].where(A2['profit'].abs() > 0, 0).astype(int)
-A2['total_profit'] = A2['profit'] * A2['trade_count']
-threshold = direct_fees
-obs_count = A2[A2['error'].abs() > threshold].shape[0]
-print("A2 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
-
-A2['capital_per_trade'] = A2['x'].abs() + A2['y'].abs()
-# A2 is already filtered to trades so we compute returns directly
-trades_A2 = A2[A2['trade_count'] > 0]
-trades_A2['returns'] = trades_A2['profit'] / trades_A2['capital_per_trade']
-
-print(A2['total_profit'].describe())
-print("A2 total profit:", A2['total_profit'].sum())
-print(trades_A2['returns'].describe())
-
-# ----------------------------
-# 2B: Agentti tietää osingot, kuluja
-# ----------------------------
-B2 = pd.read_csv(data)
-direct_fees = 20.7  # SEKeissä
-
-B2 = B2.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
-    'Ivalue_put', 'Ivalue_call', 'IV_put', 'IV_call', 'put_delta', 'call_delta',
-    'gamma', 'vega', 'call_theta', 'put_theta', 'vega', 'call_rho',
-    'put_rho', 'country', 'underlying_return', 'underlying_log_return',
-    'underlying_volatility'])
-B2['error'] = B2['y'] - B2['x']
-
-B2 = B2.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
-B2 = B2.query("error.abs() > 20.7")
-B2 = B2.reset_index(drop=True)
-
-B2['profit'] = B2['error'].abs() - direct_fees
-B2['max_trade_count'] = B2[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
-B2['trade_count'] = B2['max_trade_count'].where(B2['profit'] > 0, 0).astype(int)
-B2['total_profit'] = B2['profit'] * B2['trade_count']
-
-threshold = direct_fees
-obs_count = B2[B2['error'].abs() > threshold].shape[0]
-print("B2 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
-
-B2['capital_per_trade'] = B2['x'].abs() + B2['y'].abs()
-trades_B2 = B2[B2['trade_count'] > 0].copy()
-trades_B2['returns'] = trades_B2['profit'] / trades_B2['capital_per_trade']
-print(B2['total_profit'].describe())
-print("B2 total profit:", B2['total_profit'].sum())
-print(trades_B2['returns'].describe())
 
 # ----------------------------
 # 3A: Agentti ei tiedä osinkoja, kuluilla ja lagilla
@@ -255,67 +182,26 @@ print(B3['returns'].describe())
 # 4A: Agentti ei tiedä osinkoja, isommat kulut
 # ----------------------------
 A4 = pd.read_csv(data)
-direct_fees = 41.39  # SEKeissä
-
 A4 = A4.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
-    'Ivalue_put', 'Ivalue_call', 'IV_put', 'IV_call', 'put_delta', 'call_delta',
-    'gamma', 'vega', 'call_theta', 'put_theta', 'vega', 'call_rho',
-    'put_rho', 'country', 'underlying_return', 'underlying_log_return',
+    'IV_put', 'IV_call', 'country', 'underlying_return', 'underlying_log_return',
     'underlying_volatility'])
-A4['x'] = A4['x'] + A4['PV_alldivs']
-A4['error'] = A4['y'] - A4['x']
-
-A4 = A4.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
-A4 = A4.query("error.abs() > 41.39")  # direct fees
-A4 = A4.reset_index(drop=True)
-
-A4['profit'] = A4['error'].abs() - direct_fees
-A4['max_trade_count'] = A4[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
-A4['trades'] = A4['max_trade_count'].astype(int).where(A4['profit'] > 0, 0)
-A4['total_profit'] = A4['profit'] * A4['trades']
-A4['capital_per_trade'] = A4['x'].abs() + A4['y'].abs()
-trades_A4 = A4.copy()
-trades_A4['returns'] = (trades_A4['profit'] / trades_A4['capital_per_trade']).where(A4['trades'] > 0)
-threshold = direct_fees
-obs_count = A4[A4['error'].abs() > threshold].shape[0]
+A4 = simulate_trade(A4, False, high_fees, False)
 print("A4 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
 print(A4['total_profit'].describe())
 print("A4 total profit:", A4['total_profit'].sum())
-print(trades_A4['returns'].describe())
+print(A4['returns'].describe())
 
 # ----------------------------
 # 4B: Agentti tietää osingot, isommat kulut
 # ----------------------------
 B4 = pd.read_csv(data)
-direct_fees = 41.39  # SEKeissä
-
 B4 = B4.drop(columns=['Date', 'put_moneyness', 'call_moneyness',
-    'put_log_moneyness', 'call_log_moneyness', 'call_tv', 'put_tv',
-    'Ivalue_put', 'Ivalue_call', 'IV_put', 'IV_call', 'put_delta', 'call_delta',
-    'gamma', 'vega', 'call_theta', 'put_theta', 'vega', 'call_rho',
-    'put_rho', 'country', 'underlying_return', 'underlying_log_return',
+    'IV_put', 'IV_call', 'country','underlying_return', 'underlying_log_return',
     'underlying_volatility'])
-
-B4['error'] = B4['y'] - B4['x']
-
-B4 = B4.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
-B4 = B4.query("error.abs() > 41.39")
-B4 = B4.reset_index(drop=True)
-
-B4['profit'] = B4['error'].abs() - direct_fees
-B4['max_trade_count'] = B4[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
-B4['trades'] = (B4['profit'] > 0) * B4['max_trade_count']
-B4['total_profit'] = B4['profit'] * B4['trades']
-B4['capital_per_trade'] = B4['x'].abs() + B4['y'].abs()
-trades_B4 = B4.copy()
-trades_B4['returns'] = (trades_B4['profit'] / trades_B4['capital_per_trade']).where(B4['trades'] > 0)
-threshold = direct_fees
-obs_count = B4[B4['error'].abs() > threshold].shape[0]
-print("B4 count of observations with abs(error) > {}: {}".format(threshold, obs_count))
+B4 = simulate_trade(B4, True, high_fees, False)
 print(B4['total_profit'].describe())
 print("B4 total profit:", B4['total_profit'].sum())
-print(trades_B4['returns'].describe())
+print(B4['returns'].describe())
 
 # ----------------------------
 # 5A: Agentti ei tiedä osinkoja, isommat kulut ja lagilla
@@ -427,6 +313,17 @@ monthly_arbitrage = hist_df_valid.groupby(["year_month", "country"]).agg(
 ).reset_index()
 monthly_arbitrage["percentage_available"] = monthly_arbitrage["available"] / monthly_arbitrage["total_possible"]
 
+
+if __name__ == "__main__":
+    datas_list = ['processed_data/dk_processed_data.csv', 'processed_data/se_processed_data.csv',
+        'processed_data/no_processed_data.csv']
+    low_fees = [20, 30, 20]
+    high_fees = [40, 40, 40]
+
+
+
+
+
 for c in countries:
     subset = monthly_arbitrage[monthly_arbitrage["country"] == c]
     tick_positions = np.arange(0, len(subset), 12)
@@ -441,7 +338,6 @@ for c in countries:
     plt.tight_layout()
     #plt.savefig("käyrät/trading/1_" + c + ".png", dpi=600)
     #plt.show()
-
 
 # -------------------------------
 # SECTION 2: Monthly Arbitrage Opportunities (fee = 60)
