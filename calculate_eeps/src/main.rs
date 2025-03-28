@@ -7,7 +7,6 @@ use std::error::Error;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct Record {
-    index: usize,
     #[serde(rename = "Date")]
     date: String,
     y: f64,
@@ -66,14 +65,20 @@ fn american_option_price_fd(
 
     let (payoff, boundary_low, boundary_high, min_value) = if option_type == "put" {
         (
-            s_values.iter().map(|&s| (k - s).max(0.0)).collect::<Vec<f64>>(),
+            s_values
+                .iter()
+                .map(|&s| (k - s).max(0.0))
+                .collect::<Vec<f64>>(),
             k,
             0.0,
             (k - s0).max(0.0),
         )
     } else {
         (
-            s_values.iter().map(|&s| (s - k).max(0.0)).collect::<Vec<f64>>(),
+            s_values
+                .iter()
+                .map(|&s| (s - k).max(0.0))
+                .collect::<Vec<f64>>(),
             0.0,
             smax - k,
             (s0 - k).max(0.0),
@@ -101,12 +106,16 @@ fn american_option_price_fd(
                 let a = -alpha;
                 let b = 1.0 - beta;
                 let c = -gamma;
-                let d = alpha * v[j + 1][i - 1]
-                    + (1.0 + beta) * v[j + 1][i]
-                    + gamma * v[j + 1][i + 1];
+                let d =
+                    alpha * v[j + 1][i - 1] + (1.0 + beta) * v[j + 1][i] + gamma * v[j + 1][i + 1];
                 let v_old = v[j][i];
-                let new_val = (1.0 - omega) * v_old + (omega / b) * (d - a * v[j][i - 1] - c * v[j][i + 1]);
-                let intrinsic = if option_type == "put" { k - s_i } else { s_i - k };
+                let new_val =
+                    (1.0 - omega) * v_old + (omega / b) * (d - a * v[j][i - 1] - c * v[j][i + 1]);
+                let intrinsic = if option_type == "put" {
+                    k - s_i
+                } else {
+                    s_i - k
+                };
                 let v_new = new_val.max(intrinsic);
                 error = error.max((v_new - v_old).abs());
                 v[j][i] = v_new;
@@ -161,8 +170,10 @@ fn compute_early_exercise_premium_fd(record: &Record, m: usize, n: usize) -> (f6
         return (f64::NAN, f64::NAN);
     }
     let smax = (2.0 * s_adj).max(2.0 * k);
-    let a_call = american_option_price_fd(s_adj, k, t, r, sigma, smax, m, n, "call", 1.2, 1e-3, 10000);
-    let a_put = american_option_price_fd(s_adj, k, t, r, sigma, smax, m, n, "put", 1.2, 1e-3, 10000);
+    let a_call =
+        american_option_price_fd(s_adj, k, t, r, sigma, smax, m, n, "call", 1.2, 1e-3, 10000);
+    let a_put =
+        american_option_price_fd(s_adj, k, t, r, sigma, smax, m, n, "put", 1.2, 1e-3, 10000);
     let e_call = compute_euro_option_bs(s_adj, pv_div, k, t, r, sigma, "call");
     let e_put = compute_euro_option_bs(s_adj, pv_div, k, t, r, sigma, "put");
 
@@ -177,16 +188,13 @@ fn process_file(file_path: &str) -> Result<(), Box<dyn Error>> {
     let mut rdr = ReaderBuilder::new().from_path(file_path)?;
     let mut records: Vec<Record> = rdr.deserialize().collect::<Result<_, _>>()?;
 
-    records
-        .par_iter_mut()
-        .progress()
-        .for_each(|record| {
-            let (eep_call, eep_put) = compute_early_exercise_premium_fd(record, 100, 100);
-            record.eep_call = Some(eep_call);
-            record.eep_put = Some(eep_put);
-            // Update x by adding the net FD premium.
-            record.x = record.x + eep_call - eep_put;
-        });
+    records.par_iter_mut().progress().for_each(|record| {
+        let (eep_call, eep_put) = compute_early_exercise_premium_fd(record, 100, 100);
+        record.eep_call = Some(eep_call);
+        record.eep_put = Some(eep_put);
+        // Update x by adding the net FD premium.
+        record.x = record.x + eep_call - eep_put;
+    });
 
     let mut wtr = WriterBuilder::new().from_path(file_path)?;
     for record in records {
@@ -198,13 +206,13 @@ fn process_file(file_path: &str) -> Result<(), Box<dyn Error>> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     println!("Calculating EEP for Sweden");
-    process_file("processed_data/se_processed_data.csv")?;
+    process_file("../processed_data/se_processed_data.csv")?;
 
     println!("Calculating EEP for Denmark");
-    process_file("processed_data/dk_processed_data.csv")?;
+    process_file("../processed_data/dk_processed_data.csv")?;
 
     println!("Calculating EEP for Norway");
-    process_file("processed_data/no_processed_data.csv")?;
+    process_file("../processed_data/no_processed_data.csv")?;
 
     Ok(())
 }

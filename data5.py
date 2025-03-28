@@ -45,12 +45,12 @@ def compute_lagged_profit(row, fees):
 def simulate_trade(data, divs:bool, fees:float, lag:bool):
     if not divs:
         data['x'] = data['x'] + data['PV_alldivs']
-    data = data.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01")
+    data = data.query("call_v > 10 & put_v > 10 & ulying_volume > 0.01").copy()
     data['error'] = data['y']-data['x']
 
     if not lag:
         data['profit'] = data['error'].abs() - fees
-        data = data[data['profit'] > 0]
+        data = data[data['profit'] > 0].copy()
         data['max_trade_count'] = data[['call_v', 'put_v', 'ulying_volume']].min(axis=1) * 0.1
         data['total_profit'] = data['profit'] * data['max_trade_count']
         data['capital_per_trade'] = data['x'].abs() + data['y'].abs()
@@ -217,14 +217,11 @@ def plot_all_histograms(csvs, low_fees, high_fees, countries, show_plot=True):
 if __name__ == "__main__":
     datas_list = ['processed_data/dk_processed_data.csv','processed_data/no_processed_data.csv',
         'processed_data/se_processed_data.csv']
-    low_fees = [0.0, 0.0, 30.0]
-    high_fees = [0.0, 0.0, 60.0]
+    sek_fees = 30.0
     dkk_sek = 1.45
     nok_sek = 0.96
-    low_fees[0] = low_fees[2]*dkk_sek
-    low_fees[1] = low_fees[2]*nok_sek
-    high_fees[0] = high_fees[2]*dkk_sek
-    high_fees[1] = high_fees[2]*nok_sek
+    low_fees = [sek_fees*dkk_sek, sek_fees*nok_sek, sek_fees]
+    high_fees = [sek_fees*dkk_sek*2, sek_fees*nok_sek*2, sek_fees*2]
     countries = ['Denmark', 'Norway', 'Sweden']
     wrapper(datas_list, low_fees, high_fees, countries)
     plot_all_histograms(datas_list, low_fees, high_fees, countries)
