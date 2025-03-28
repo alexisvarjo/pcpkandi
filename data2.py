@@ -12,7 +12,6 @@ from joblib import Parallel, delayed
 
 # Read risk-free rates if needed
 rates_o = pd.read_csv("unprocessed_data/risk_free_rates2.csv", parse_dates=['Date'], index_col='Date')
-
 # Read options data; note that the index is set and then converted to datetime
 options = pd.read_csv("unprocessed_data/kovadata3.csv", header=[0, 1, 2])
 options = options.set_index('Date')
@@ -409,45 +408,6 @@ def process_option_group(i, options, rates_o):
 
     return reg_data
 
-def compute_underlying_metrics(df, window=30):
-    min_periods = 1
-    # Assume that for a given date the underlying price is the same.
-    df_daily = df.groupby('Date').agg({
-        'ulying_price': 'first',
-        'ulying_volume': 'first',
-        'put_price': 'first',
-        'put_v': 'first',
-        'call_price': 'first',
-        'call_v': 'first'
-    }).sort_index()
-    df_daily['ulying_volume_inmoney'] = df_daily['ulying_volume'] * df_daily['ulying_price'] * 1000
-    df_daily['underlying_return'] = df_daily['ulying_price'].pct_change()
-    df_daily['underlying_log_return'] = np.log(df_daily['ulying_price'] / df_daily['ulying_price'].shift(1))
-
-    # Use Series.where instead of np.where to keep a pandas Series.
-    df_daily['ulying_illiquidity'] = (
-        (df_daily['underlying_return'].abs() / df_daily['ulying_volume_inmoney']).where(df_daily['ulying_volume'] != 0)
-    ).rolling(window=window, min_periods=min_periods).mean()
-
-    df_daily['put_return'] = df_daily['put_price'].pct_change()
-    df_daily['call_return'] = df_daily['call_price'].pct_change()
-
-    df_daily['put_volume_inmoney'] = df_daily['put_v'] * df_daily['put_price']
-    df_daily['call_volume_inmoney'] = df_daily['call_v'] * df_daily['call_price']
-
-    df_daily['put_illiquidity'] = (
-        (df_daily['put_return'].abs() / df_daily['put_volume_inmoney']).where(df_daily['put_v'] != 0)
-    ).rolling(window=window, min_periods=min_periods).mean()
-
-    df_daily['call_illiquidity'] = (
-        (df_daily['call_return'].abs() / df_daily['call_volume_inmoney']).where(df_daily['call_v'] != 0)
-    ).rolling(window=window, min_periods=min_periods).mean()
-
-    # Rolling volatility (annualized using sqrt(252)); adjust the window if needed.
-    df_daily['underlying_volatility'] = df_daily['underlying_log_return'].rolling(window=window, min_periods=min_periods).std() * np.sqrt(252)
-    return df_daily[['underlying_return', 'underlying_log_return', 'underlying_volatility', 'ulying_illiquidity', 'put_illiquidity', 'call_illiquidity']].reset_index()
-
-
 group_indices = list(range(0, len(options.columns), 9))
 results = Parallel(n_jobs=-1)(
     delayed(process_option_group)(i, options, rates_o) for i in group_indices
@@ -458,20 +418,7 @@ linreg_dk = pd.concat([df for df in results if not df.empty and df['country'].il
 linreg_se = pd.concat([df for df in results if not df.empty and df['country'].iloc[0] == "SWEDEN"])
 linreg_no = pd.concat([df for df in results if not df.empty and df['country'].iloc[0] == "NORWAY"])
 
-# For each country-specific DataFrame, reset index to bring Date into a column,
-# then compute and merge underlying metrics, and save to CSV.
-if not linreg_dk.empty:
-    linreg_dk = linreg_dk.reset_index()
-    metrics_dk = compute_underlying_metrics(linreg_dk, window=30)
-    linreg_dk = linreg_dk.merge(metrics_dk, on='Date', how='left')
-    linreg_dk.to_csv('processed_data/dk_processed_data.csv', index=False)
-if not linreg_se.empty:
-    linreg_se = linreg_se.reset_index()
-    metrics_se = compute_underlying_metrics(linreg_se, window=30)
-    linreg_se = linreg_se.merge(metrics_se, on='Date', how='left')
-    linreg_se.to_csv('processed_data/se_processed_data.csv', index=False)
-if not linreg_no.empty:
-    linreg_no = linreg_no.reset_index()
-    metrics_no = compute_underlying_metrics(linreg_no, window=30)
-    linreg_no = linreg_no.merge(metrics_no, on='Date', how='left')
-    linreg_no.to_csv('processed_data/no_processed_data.csv', index=False)
+
+linreg_dk.to_csv('processed_data/dk_processed_data.csv', index=False)
+linreg_se.to_csv('processed_data/se_processed_data.csv', index=False)
+linreg_no.to_csv('processed_data/no_processed_data.csv', index=False)
