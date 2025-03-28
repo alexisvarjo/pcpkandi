@@ -10,9 +10,6 @@ def drop_low_volume(df, min_vol):
     df = df[df['ulying_volume'] >= min_vol]
     return df
 
-def restrict_interestrate(df, min_interestrate):
-    df = df[df['risk_free_rate'] >= min_interestrate]
-    return df
 
 def dropilliquid(df, max_illiquidity):
     df = df[df['ulying_illiquidity'] <= max_illiquidity]
@@ -189,126 +186,6 @@ plt.show()
 #plt.savefig(f"käyrät/winzorisoitu/plot{count}.png", dpi=600)
 #plt.close()
 count += 1
-
-
-df = linreg_no
-df['parity_error'] = df['y'] - df['x']
-df['IV'] = (df['IV_put'] + df['IV_call']) / 2
-df['opt_volume'] = (df['put_v'] + df['call_v'])/2
-df['moneyness'] = (df['call_moneyness'] + df['put_moneyness']) / 2
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + underlying_volatility + maturity + opt_volume + underlying_log_return + strike"
-model = smf.ols(formula, data=df).fit()
-print("\nnorway Regression results on parity error:")
-print(model.summary())
-
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + maturity + opt_volume + underlying_log_return + strike"
-model = smf.ols(formula, data=df).fit()
-print("\nnorway Regression results on parity error:")
-print(model.summary())
-
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + maturity + opt_volume + strike"
-model = smf.ols(formula, data=df).fit()
-print("\nnorway Regression results on parity error:")
-print(model.summary())
-
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + maturity + strike"
-model = smf.ols(formula, data=df).fit()
-print("\n norway Regression results on parity error:")
-print(model.summary())
-
-formula = "parity_error ~ ulying_illiquidity + call_illiquidity + put_illiquidity"
-model = smf.ols(formula, data=df).fit()
-print("\nnorway Regression results on parity error:")
-print(model.summary())
-
-formula = "parity_error ~ strike + ulying_illiquidity + call_illiquidity + put_illiquidity"
-model = smf.ols(formula, data=df).fit()
-print("\nnorway Regression results on parity error:")
-print(model.summary())
-
-df = linreg_se
-df['parity_error'] = df['y'] - df['x']
-df['IV'] = (df['IV_put'] + df['IV_call']) / 2
-df['opt_volume'] = (df['put_v'] + df['call_v'])/2
-df['moneyness'] = (df['call_moneyness'] + df['put_moneyness']) / 2
-
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + underlying_volatility + maturity + opt_volume + underlying_log_return + strike"
-model = smf.ols(formula, data=df).fit()
-print("\nsweden Regression results on parity error:")
-print(model.summary())
-
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + maturity + opt_volume + underlying_log_return + strike"
-model = smf.ols(formula, data=df).fit()
-print("\nsweden Regression results on parity error:")
-print(model.summary())
-
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + maturity + opt_volume + strike"
-model = smf.ols(formula, data=df).fit()
-print("\nsweden Regression results on parity error:")
-print(model.summary())
-
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + maturity + strike"
-model = smf.ols(formula, data=df).fit()
-print("\nsweden Regression results on parity error:")
-print(model.summary())
-
-formula = "parity_error ~ ulying_illiquidity + call_illiquidity + put_illiquidity"
-model = smf.ols(formula, data=df).fit()
-print("\nsweden Regression results on parity error:")
-print(model.summary())
-
-formula = "parity_error ~ strike + ulying_illiquidity + call_illiquidity + put_illiquidity"
-model = smf.ols(formula, data=df).fit()
-print("\nsweden Regression results on parity error:")
-print(model.summary())
-
-df = linreg_dk
-df['parity_error'] = df['y'] - df['x']
-df['IV'] = (df['IV_put'] + df['IV_call']) / 2
-df['opt_volume'] = (df['put_v'] + df['call_v'])/2
-df['moneyness'] = (df['call_moneyness'] + df['put_moneyness']) / 2
-
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + underlying_volatility + maturity + opt_volume + underlying_log_return + strike"
-model = smf.ols(formula, data=df).fit()
-print("\ndenmark Regression results on parity error:")
-print(model.summary())
-
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + maturity + opt_volume + underlying_log_return + strike"
-model = smf.ols(formula, data=df).fit()
-print("\ndenmark Regression results on parity error:")
-print(model.summary())
-
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + maturity + opt_volume + strike"
-model = smf.ols(formula, data=df).fit()
-print("\ndenmark Regression results on parity error:")
-print(model.summary())
-
-#parity error vs all raw variables
-formula = "parity_error ~ risk_free_rate + IV + maturity + strike"
-model = smf.ols(formula, data=df).fit()
-print("\ndenmark Regression results on parity error:")
-print(model.summary())
-
-formula = "parity_error ~ ulying_illiquidity + call_illiquidity + put_illiquidity"
-model = smf.ols(formula, data=df).fit()
-print("\ndenmark Regression results on parity error:")
-print(model.summary())
-
-formula = "parity_error ~ strike + ulying_illiquidity + call_illiquidity + put_illiquidity"
-model = smf.ols(formula, data=df).fit()
-print("\ndenmark Regression results on parity error:")
-print(model.summary())
 
 bins = 60
 # Create histograms for error distributions (y - x) for each country
