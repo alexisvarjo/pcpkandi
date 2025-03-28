@@ -259,7 +259,6 @@ def calculate_pv_alldivs(df, rates_df, country):
         pv_alldivs_list.append(pv_sum)
 
     df["PV_alldivs"] = pv_alldivs_list
-    print(df["PV_alldivs"].describe())
     return df
 
 
@@ -369,42 +368,16 @@ def process_option_group(i, options, rates_o):
     put_price = filtered_options.iloc[:, i+7]
     put_v = filtered_options.iloc[:, i+8]
 
-    IValue_call = (ulying_price - strike).clip(lower=0)
-    IValue_put = (strike - ulying_price).clip(lower=0)
-
     # Get country identifier from column information and add it as a new column.
     country = options.columns[i][2]
     rates = get_risk_free_rate(maturity, country, filtered_options.index)
-    call_tv = call_price - IValue_call
-    put_tv = put_price - IValue_put
     call_moneyness = ulying_price / strike
-    call_log_moneyness = np.log(call_moneyness)
     put_moneyness = strike / ulying_price
-    put_log_moneyness = np.log(put_moneyness)
-
     IV_put = get_iv(ulying_price, strike, rates, maturity, put_price, False)
     IV_call = get_iv(ulying_price, strike, rates, maturity, call_price, True)
-    put_d1 = bs_d1(ulying_price, strike, maturity, rates, IV_put)
-    call_d1 = bs_d1(ulying_price, strike, maturity, rates, IV_call)
-    put_d2 = bs_d2(ulying_price, strike, maturity, rates, IV_put)
-    call_d2 = bs_d2(ulying_price, strike, maturity, rates, IV_call)
-    put_delta = np.exp(-rates*maturity) * (norm.cdf(put_d1) - 1)
-    call_delta = np.exp(-rates*maturity) * norm.cdf(call_d1)
-    gamma = (np.exp(-rates*maturity) / (ulying_price * IV_put * np.sqrt(maturity))) * norm.pdf(put_d1)
-    vega_val = vega(ulying_price, strike, rates, maturity, IV_put)
-    call_theta = (1/365) * ((-ulying_price * IV_put * np.exp(-rates*maturity) * norm.pdf(put_d1)) / (2 * np.sqrt(maturity))
-                             - rates * strike * np.exp(-rates * maturity) * norm.cdf(call_d2)
-                             + rates * strike * np.exp(-rates*maturity) * norm.cdf(call_d1))
-    put_theta = (1/365) * ((-ulying_price * IV_put * np.exp(-rates*maturity) * norm.pdf(put_d1)) / (2 * np.sqrt(maturity))
-                            + rates * strike * np.exp(-rates * maturity) * norm.cdf(-put_d2)
-                            - rates * strike * np.exp(-rates*maturity) * norm.cdf(-put_d1))
-    call_rho = (1/100) * strike * maturity * np.exp(-rates * maturity) * norm.cdf(call_d2)
-    put_rho = (1/100) * -strike * maturity * np.exp(-rates * maturity) * norm.cdf(-put_d2)
     eksp = -rates * maturity
     new_y = call_price - put_price
     new_x = ulying_price - (strike * np.exp(eksp))
-    print("Calculated greeks for", ulying_price.name)
-
 
     # Build the regression DataFrame using the filtered options index (date)
     reg_data = pd.DataFrame({
@@ -422,22 +395,8 @@ def process_option_group(i, options, rates_o):
         'risk_free_rate': rates,
         'put_moneyness': put_moneyness,
         'call_moneyness': call_moneyness,
-        'put_log_moneyness': put_log_moneyness,
-        'call_log_moneyness': call_log_moneyness,
-        'call_tv': call_tv,
-        'put_tv': put_tv,
-        'Ivalue_put': IValue_put,
-        'Ivalue_call': IValue_call,
         'IV_put': IV_put,
         'IV_call': IV_call,
-        'put_delta': put_delta,
-        'call_delta': call_delta,
-        'gamma': gamma,
-        'vega': vega_val,
-        'call_theta': call_theta,
-        'put_theta': put_theta,
-        'call_rho': call_rho,
-        'put_rho': put_rho
     }, index=filtered_options.index)
     reg_data.index.name = 'Date'
     # Add the country identifier
@@ -486,7 +445,6 @@ def compute_underlying_metrics(df, window=30):
 
     # Rolling volatility (annualized using sqrt(252)); adjust the window if needed.
     df_daily['underlying_volatility'] = df_daily['underlying_log_return'].rolling(window=window, min_periods=min_periods).std() * np.sqrt(252)
-
     return df_daily[['underlying_return', 'underlying_log_return', 'underlying_volatility', 'ulying_illiquidity', 'put_illiquidity', 'call_illiquidity']].reset_index()
 
 
@@ -500,9 +458,6 @@ linreg_dk = pd.concat([df for df in results if not df.empty and df['country'].il
 linreg_se = pd.concat([df for df in results if not df.empty and df['country'].iloc[0] == "SWEDEN"])
 linreg_no = pd.concat([df for df in results if not df.empty and df['country'].iloc[0] == "NORWAY"])
 
-
-
-print(linreg_dk.head().to_string())
 # For each country-specific DataFrame, reset index to bring Date into a column,
 # then compute and merge underlying metrics, and save to CSV.
 if not linreg_dk.empty:

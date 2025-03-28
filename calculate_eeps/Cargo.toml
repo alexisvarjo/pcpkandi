@@ -1,0 +1,11 @@
+[package]
+name = "calculate_eeps"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+csv = "1.1"
+serde = { version = "1.0", features = ["derive"] }
+rayon = "1.5"
+indicatif = { version = "0.16", features = ["rayon"] }
+statrs = "0.15"
